@@ -25,6 +25,10 @@
 #include "ns3/aodv-helper.h"
 #include "ns3/olsr-helper.h"
 
+#include <iostream>
+#include <string>
+#include <cmath>
+
 using namespace ns3;
 using namespace std;
 
@@ -33,21 +37,33 @@ int main (int argc, char *argv[])
   RngSeedManager::SetSeed(121277);
   Ptr<UniformRandomVariable> U = CreateObject<UniformRandomVariable>();
   U->SetAttribute ("Stream", IntegerValue (111));
-  //U->SetAttribute ("Min", DoubleValue (0.0));
-  //U->SetAttribute ("Max", DoubleValue (0.1));
+  U->SetAttribute ("Min", DoubleValue (0.0));
+  U->SetAttribute ("Max", DoubleValue (0.1));
   
-  uint32_t numNodes = 20;
+  uint32_t numNodes = 2;
+  string dataRate = "1";
   uint32_t i;
   uint32_t port1 = 1;
   uint32_t port2 = 5000;;
   double startTime = 0.0;
-  double stopTime = 10.0;
+  double stopTime = 5.0;
+  uint32_t packetSize = 512;
+  double txPower = 40;
   
   CommandLine cmd;
   cmd.AddValue("numNodes","Number of nodes",numNodes);
+  cmd.AddValue("dataRate","Data Rate in Mbps",dataRate);
+  cmd.AddValue("txPower","Transmission Power in mW",txPower);
   cmd.Parse(argc,argv);
   
-  Config::SetDefault ("ns3::OnOffApplication::DataRate", StringValue ("1Mbps"));
+  dataRate = dataRate + "Mbps";
+  txPower = 10*log10(txPower);
+  
+  Config::SetDefault ("ns3::OnOffApplication::DataRate", StringValue(dataRate));
+  Config::SetDefault ("ns3::OnOffApplication::OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1000]"));
+  Config::SetDefault ("ns3::OnOffApplication::OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
+  Config::SetDefault ("ns3::OnOffApplication::PacketSize", UintegerValue (packetSize));
+  
   
   NodeContainer nodes;
   nodes.Create(numNodes);
@@ -55,11 +71,10 @@ int main (int argc, char *argv[])
   WifiHelper wifi;
   
   YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
-  wifiPhy.Set ("RxGain", DoubleValue (0) );
+  wifiPhy.Set("TxPowerStart",DoubleValue(txPower));
+  wifiPhy.Set("TxPowerEnd",DoubleValue(txPower));
   
-  YansWifiChannelHelper wifiChannel;
-  wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-  wifiChannel.AddPropagationLoss ("ns3::FixedRssLossModel","Rss",DoubleValue (-80));
+  YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
   wifiPhy.SetChannel (wifiChannel.Create ());
   
   NqosWifiMacHelper wifiMac = NqosWifiMacHelper::Default ();
@@ -69,7 +84,6 @@ int main (int argc, char *argv[])
   wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
                                 "DataMode",StringValue ("DsssRate1Mbps"),
                                 "ControlMode",StringValue ("DsssRate1Mbps"));
-  
   NetDeviceContainer devices = wifi.Install (wifiPhy, wifiMac, nodes);
   
   MobilityHelper mobility;
@@ -96,18 +110,12 @@ int main (int argc, char *argv[])
   for(i = 0;i < numNodes/2;i++)
   {
     OnOffHelper source1 ("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(i+(numNodes/2)),port2));
-    source1.SetAttribute ("OnTime", StringValue ("ns3::UniformRandomVariable[Min=0.,Max=1.]"));
-    source1.SetAttribute ("OffTime", StringValue ("ns3::UniformRandomVariable[Min=0.,Max=0.]"));
-    //source1.SetAttribute ("DataRate", DataRateValue (dataRate));
     sourceApps1.Add(source1.Install(NodeContainer(nodes.Get(i))));
     
     PacketSinkHelper sink1("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(i),port1));
     sinkApps1.Add(sink1.Install(nodes.Get(i)));
     
     OnOffHelper source2 ("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(i),port1));
-    source2.SetAttribute ("OnTime", StringValue ("ns3::UniformRandomVariable[Min=0.,Max=1.]"));
-    source2.SetAttribute ("OffTime", StringValue ("ns3::UniformRandomVariable[Min=0.,Max=0.]"));
-    //source2.SetAttribute ("DataRate", DataRateValue (dataRate));
     sourceApps2.Add(source2.Install(NodeContainer(nodes.Get(i+(numNodes/2)))));
     
     PacketSinkHelper sink2("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(i+(numNodes/2)),port2));
