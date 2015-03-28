@@ -24,31 +24,27 @@
 #include "ns3/internet-module.h"
 #include "ns3/aodv-helper.h"
 #include "ns3/olsr-helper.h"
+#include "ns3/netanim-module.h"
 
 #include <iostream>
 #include <string>
 #include <cmath>
+#include <vector>
 
 using namespace ns3;
 using namespace std;
 
 int main (int argc, char *argv[])
 {
-  RngSeedManager::SetSeed(121277);
-  Ptr<UniformRandomVariable> U = CreateObject<UniformRandomVariable>();
-  U->SetAttribute ("Stream", IntegerValue (111));
-  U->SetAttribute ("Min", DoubleValue (0.0));
-  U->SetAttribute ("Max", DoubleValue (0.1));
   
-  uint32_t numNodes = 2;
+  uint32_t numNodes = 50;
   string dataRate = "1";
   uint32_t i;
-  uint32_t port1 = 1;
-  uint32_t port2 = 5000;;
+  uint32_t port = 100;
   double startTime = 0.0;
-  double stopTime = 5.0;
+  double stopTime = 2.5;
   uint32_t packetSize = 512;
-  double txPower = 40;
+  double txPower = 10000;
   
   CommandLine cmd;
   cmd.AddValue("numNodes","Number of nodes",numNodes);
@@ -102,38 +98,49 @@ int main (int argc, char *argv[])
   ipv4.SetBase ("10.1.0.0", "255.255.0.0");
   Ipv4InterfaceContainer interfaces = ipv4.Assign (devices);
   
-  ApplicationContainer sourceApps1;
-  ApplicationContainer sourceApps2;
-  ApplicationContainer sinkApps1;
-  ApplicationContainer sinkApps2;
+  RngSeedManager::SetSeed(123456);
+  Ptr<UniformRandomVariable> U = CreateObject<UniformRandomVariable>();
+  U->SetAttribute ("Stream", IntegerValue (123));
   
-  for(i = 0;i < numNodes/2;i++)
+  ApplicationContainer sourceApps;
+  ApplicationContainer sinkApps;
+  
+  vector <uint32_t> j;
+  for(i = 0;i<numNodes;i++)
+    j.push_back(i);
+  
+  while(!j.empty())
   {
-    OnOffHelper source1 ("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(i+(numNodes/2)),port2));
-    sourceApps1.Add(source1.Install(NodeContainer(nodes.Get(i))));
+    U->SetAttribute ("Min", DoubleValue (1.0));
+    U->SetAttribute ("Max", DoubleValue (j.size()-1));
+    uint32_t peer = U->GetInteger();
     
-    PacketSinkHelper sink1("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(i),port1));
-    sinkApps1.Add(sink1.Install(nodes.Get(i)));
+    OnOffHelper source1 ("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(j[peer]),port+j[peer]));
+    sourceApps.Add(source1.Install(NodeContainer(nodes.Get(j[0]))));
     
-    OnOffHelper source2 ("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(i),port1));
-    sourceApps2.Add(source2.Install(NodeContainer(nodes.Get(i+(numNodes/2)))));
+    PacketSinkHelper sink1("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(j[0]),port+j[0]));
+    sinkApps.Add(sink1.Install(nodes.Get(j[0])));
     
-    PacketSinkHelper sink2("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(i+(numNodes/2)),port2));
-    sinkApps2.Add(sink2.Install(nodes.Get(i+(numNodes/2))));
+    OnOffHelper source2 ("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(j[0]),port+j[0]));
+    sourceApps.Add(source2.Install(NodeContainer(nodes.Get(j[peer]))));
     
+    PacketSinkHelper sink2("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(j[peer]),port+j[peer]));
+    sinkApps.Add(sink2.Install(nodes.Get(j[peer])));
+    
+    cout<<"Peer1 = "<<j[0]<<" Peer2 "<<j[peer]<<endl;
+    
+    j.erase(j.begin());
+    j.erase(j.begin()+peer-1);
   }
   
-  sourceApps1.Start(Seconds(startTime));
-  sourceApps1.Stop(Seconds(stopTime));
-  sourceApps2.Start(Seconds(startTime));
-  sourceApps2.Stop(Seconds(stopTime));
-    
-  sinkApps1.Start(Seconds(startTime));
-  sinkApps1.Stop(Seconds(stopTime));
-  sinkApps2.Start(Seconds(startTime));
-  sinkApps2.Stop(Seconds(stopTime));
+  sourceApps.Start(Seconds(startTime));
+  sourceApps.Stop(Seconds(stopTime));
+  sinkApps.Start(Seconds(startTime));
+  sinkApps.Stop(Seconds(stopTime));
   
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
+  
+  AnimationInterface anim ("wireless-animation.xml");
   
   Simulator::Stop(Seconds(stopTime));
   Simulator::Run();
@@ -142,20 +149,12 @@ int main (int argc, char *argv[])
   double goodput;
   i = 0;
   cout<<"---------------------------------------------------"<<endl;
-  for(ApplicationContainer::Iterator k = sinkApps1.Begin();k != sinkApps1.End();k++)
+  for(ApplicationContainer::Iterator k = sinkApps.Begin();k != sinkApps.End();k++)
   {
     Ptr<PacketSink> temp = DynamicCast<PacketSink>(*k);
     double bytesRcvd = temp->GetTotalRx();
     goodput = bytesRcvd*8/1024/(stopTime-startTime);
-    cout<<"Sink "<<i<<" goodput "<<goodput<<" kbps"<<endl;
-    i++;
-  }
-  for(ApplicationContainer::Iterator k = sinkApps2.Begin();k != sinkApps2.End();k++)
-  {
-    Ptr<PacketSink> temp = DynamicCast<PacketSink>(*k);
-    double bytesRcvd = temp->GetTotalRx();
-    goodput = bytesRcvd*8/1024/(stopTime-startTime);
-    cout<<"Sink "<<i<<" goodput "<<goodput<<" kbps"<<endl;
+    cout<<"Sink "<<" goodput "<<goodput<<" kbps"<<endl;
     i++;
   }
   return 0;
