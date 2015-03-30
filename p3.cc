@@ -35,11 +35,13 @@
 using namespace ns3;
 using namespace std;
 
+#define channel_capacity 11
+#define duty_cycle 0.5
+
 int main (int argc, char *argv[])
 {
   
   uint32_t numNodes = 10;
-  string dataRate = "1";
   uint32_t i;
   uint32_t port = 100;
   double startTime = 0.0;
@@ -47,15 +49,19 @@ int main (int argc, char *argv[])
   uint32_t packetSize = 512;
   double txPower = 100;
   string routingProtocol = "olsr";
+  double trafficIntensity = 0.5;
   
   CommandLine cmd;
   cmd.AddValue("numNodes","Number of nodes",numNodes);
-  cmd.AddValue("dataRate","Data Rate in Mbps",dataRate);
   cmd.AddValue("txPower","Transmission Power in mW",txPower);
   cmd.AddValue("routingProtocol","The Routing Protocol",routingProtocol);
+  cmd.AddValue("trafficIntensity","The Traffic Intensity",trafficIntensity);
   cmd.Parse(argc,argv);
   
-  dataRate = dataRate + "Mbps";
+  double rate = trafficIntensity * channel_capacity / numNodes / duty_cycle;
+  stringstream ss;
+  ss<<rate;
+  string dataRate = ss.str() + "Mbps";
   
   Config::SetDefault ("ns3::OnOffApplication::DataRate", StringValue(dataRate));
   Config::SetDefault ("ns3::OnOffApplication::OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.5]"));
@@ -65,8 +71,6 @@ int main (int argc, char *argv[])
   
   NodeContainer nodes;
   nodes.Create(numNodes);
-  
-  WifiHelper wifi;
   
   YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
   wifiPhy.Set("TxPowerStart",DoubleValue(10*log10(txPower)));
@@ -78,6 +82,8 @@ int main (int argc, char *argv[])
   NqosWifiMacHelper wifiMac = NqosWifiMacHelper::Default ();
   
   wifiMac.SetType ("ns3::AdhocWifiMac");
+  
+  WifiHelper wifi;
   wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
   wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager",
                                 "DataMode",StringValue ("DsssRate1Mbps"),
