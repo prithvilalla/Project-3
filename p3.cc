@@ -26,9 +26,11 @@
 
 
 #include <iostream>
+#include <iomanip>
 #include <string>
 #include <cmath>
 #include <vector>
+#include <fstream>
 
 using namespace ns3;
 using namespace std;
@@ -36,15 +38,15 @@ using namespace std;
 int main (int argc, char *argv[])
 {
   
-  uint32_t numNodes = 100;
+  uint32_t numNodes = 10;
   string dataRate = "1";
   uint32_t i;
   uint32_t port = 100;
   double startTime = 0.0;
-  double stopTime = 5.0;
+  double stopTime = 10.0;
   uint32_t packetSize = 512;
   double txPower = 100;
-  string routingProtocol = "aodv";
+  string routingProtocol = "olsr";
   
   CommandLine cmd;
   cmd.AddValue("numNodes","Number of nodes",numNodes);
@@ -54,11 +56,10 @@ int main (int argc, char *argv[])
   cmd.Parse(argc,argv);
   
   dataRate = dataRate + "Mbps";
-  txPower = 10*log10(txPower);
   
   Config::SetDefault ("ns3::OnOffApplication::DataRate", StringValue(dataRate));
-  Config::SetDefault ("ns3::OnOffApplication::OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=1000]"));
-  Config::SetDefault ("ns3::OnOffApplication::OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0]"));
+  Config::SetDefault ("ns3::OnOffApplication::OnTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.5]"));
+  Config::SetDefault ("ns3::OnOffApplication::OffTime", StringValue ("ns3::ConstantRandomVariable[Constant=0.5]"));
   Config::SetDefault ("ns3::OnOffApplication::PacketSize", UintegerValue (packetSize));
   
   
@@ -68,8 +69,8 @@ int main (int argc, char *argv[])
   WifiHelper wifi;
   
   YansWifiPhyHelper wifiPhy =  YansWifiPhyHelper::Default ();
-  wifiPhy.Set("TxPowerStart",DoubleValue(txPower));
-  wifiPhy.Set("TxPowerEnd",DoubleValue(txPower));
+  wifiPhy.Set("TxPowerStart",DoubleValue(10*log10(txPower)));
+  wifiPhy.Set("TxPowerEnd",DoubleValue(10*log10(txPower)));
   
   YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default();
   wifiPhy.SetChannel (wifiChannel.Create ());
@@ -148,7 +149,7 @@ int main (int argc, char *argv[])
     PacketSinkHelper sink2("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(j[peer]),port+j[peer]));
     sinkApps.Add(sink2.Install(nodes.Get(j[peer])));
     
-    cout<<"Peer1 = "<<j[0]<<" Peer2 "<<j[peer]<<endl;
+    //cout<<"Peer1 = "<<j[0]<<" Peer2 "<<j[peer]<<endl;
     
     j.erase(j.begin());
     j.erase(j.begin()+peer-1);
@@ -160,7 +161,7 @@ int main (int argc, char *argv[])
   
   Ipv4GlobalRoutingHelper::PopulateRoutingTables();
   
-  AnimationInterface anim ("wireless-animation.xml");
+  //AnimationInterface anim ("wireless-animation.xml");
   
   Simulator::Stop(Seconds(stopTime));
   Simulator::Run();
@@ -175,6 +176,21 @@ int main (int argc, char *argv[])
   }
   rcvd /= 1024;
   cout<<"Total Received Data = "<<rcvd<<" kB"<<endl;
+  
+  double tx = 0;
+  cout<<"---------------------------------------------------"<<endl;
+  for(ApplicationContainer::Iterator k = sourceApps.Begin();k != sourceApps.End();k++)
+  {
+    Ptr<OnOffApplication> temp = DynamicCast<OnOffApplication>(*k);
+    tx += temp->getTxBytes();
+  }
+  tx /= 1024;
+  cout<<"Total Transmitted Data = "<<tx<<" kB"<<endl;
+  cout<<"Efficiency = "<<rcvd/tx<<" kB"<<endl;
+  
+  ofstream output("p3-output.txt", ios::app);
+  output<<setw(10)<<numNodes<<"\t\t\t\t"<<setw(10)<<txPower<<"\t\t\t\t"<<setw(10)<<routingProtocol<<"\t\t\t\t"<<setw(10)<<dataRate<<"\t\t\t\t"<<setw(10)<<rcvd<<setw(10)<<tx<<setw(10)<<rcvd/tx<<endl;
+  output.close();
 
   return 0; 
 }
