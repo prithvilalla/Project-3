@@ -3,10 +3,8 @@
 #PBS -l nodes=1:fourcore
 #PBS -l walltime=00:10:00
 #PBS -N Rishipal
-# The below chnages the working directory to the location of
-# your testmpi program
-# The below tells MPI to run your jobs on 16 processors
-cd ns-3.21
+
+cd ns-allinone-3.21/ns-3.21
 echo "" > p3-output.txt
 echo "numNodes\t\t\ttxPower\t\t\troutingProtocol\t\t\tdataRate\t\t\tbytesRx\t\t\tbytesTx\t\t\tEfficiency" >> p3-output.txt
 clear
