@@ -24,7 +24,6 @@
 #include "ns3/olsr-helper.h"
 #include "ns3/netanim-module.h"
 
-
 #include <iostream>
 #include <iomanip>
 #include <string>
@@ -38,24 +37,35 @@ using namespace std;
 #define channel_capacity 11
 #define duty_cycle 0.5
 
+uint32_t total = 0;
+
+void trace(Ptr<const Packet> dataPacket)
+{
+  total++;
+}
+
 int main (int argc, char *argv[])
 {
+
+  Time::SetResolution(Time::US);
   
-  uint32_t numNodes = 10;
+  uint32_t numNodes = 50;
   uint32_t i;
   uint32_t port = 100;
   double startTime = 0.0;
-  double stopTime = 10.0;
+  double stopTime = 5.0;
   uint32_t packetSize = 512;
-  double txPower = 100;
+  double txPower = 250;
   string routingProtocol = "olsr";
-  double trafficIntensity = 0.5;
+  double trafficIntensity = 0.9;
+  uint32_t seed = 123;
   
   CommandLine cmd;
   cmd.AddValue("numNodes","Number of nodes",numNodes);
   cmd.AddValue("txPower","Transmission Power in mW",txPower);
   cmd.AddValue("routingProtocol","The Routing Protocol",routingProtocol);
   cmd.AddValue("trafficIntensity","The Traffic Intensity",trafficIntensity);
+  cmd.AddValue("seed","Seed",seed);
   cmd.Parse(argc,argv);
   
   double rate = trafficIntensity * channel_capacity / numNodes / duty_cycle;
@@ -116,7 +126,7 @@ int main (int argc, char *argv[])
   ipv4.SetBase ("10.1.0.0", "255.255.0.0");
   Ipv4InterfaceContainer interfaces = ipv4.Assign (devices);
   
-  RngSeedManager::SetSeed(1234567);
+  RngSeedManager::SetSeed(seed);
   
   Ptr<UniformRandomVariable> U = CreateObject<UniformRandomVariable>();
   U->SetAttribute ("Stream", IntegerValue (123));
@@ -155,8 +165,6 @@ int main (int argc, char *argv[])
     PacketSinkHelper sink2("ns3::UdpSocketFactory",InetSocketAddress(interfaces.GetAddress(j[peer]),port+j[peer]));
     sinkApps.Add(sink2.Install(nodes.Get(j[peer])));
     
-    //cout<<"Peer1 = "<<j[0]<<" Peer2 "<<j[peer]<<endl;
-    
     j.erase(j.begin());
     j.erase(j.begin()+peer-1);
   }
@@ -169,9 +177,21 @@ int main (int argc, char *argv[])
   
   //AnimationInterface anim ("wireless-animation.xml");
   
+  for(ApplicationContainer::Iterator k = sourceApps.Begin();k != sourceApps.End();k++)
+  {
+    Ptr<OnOffApplication> temp = DynamicCast<OnOffApplication>(*k);
+    temp->TraceConnectWithoutContext("Tx", MakeCallback(&trace));
+  }
+  
   Simulator::Stop(Seconds(stopTime));
   Simulator::Run();
   Simulator::Destroy();
+  
+  cout<<"numNodes = "<<numNodes<<endl;
+  cout<<"txPower = "<<txPower<<endl;
+  cout<<"routingProtocol = "<<routingProtocol<<endl;
+  cout<<"trafficIntensity = "<<trafficIntensity<<endl;
+  cout<<"dataRate = "<<dataRate<<endl;
   
   double rcvd = 0;
   cout<<"---------------------------------------------------"<<endl;
@@ -183,19 +203,16 @@ int main (int argc, char *argv[])
   rcvd /= 1024;
   cout<<"Total Received Data = "<<rcvd<<" kB"<<endl;
   
-  double tx = 0;
+  double tx = total * 512 /1024;
   cout<<"---------------------------------------------------"<<endl;
-  for(ApplicationContainer::Iterator k = sourceApps.Begin();k != sourceApps.End();k++)
-  {
-    Ptr<OnOffApplication> temp = DynamicCast<OnOffApplication>(*k);
-    tx += temp->getTxBytes();
-  }
-  tx /= 1024;
+  cout<<"Number of Packets Send = "<<total<<endl;
+  cout<<"---------------------------------------------------"<<endl;
   cout<<"Total Transmitted Data = "<<tx<<" kB"<<endl;
-  cout<<"Efficiency = "<<rcvd/tx<<" kB"<<endl;
-  
+  cout<<"---------------------------------------------------"<<endl;
+  cout<<"Efficiency = "<<rcvd/tx<<endl;
+  cout<<"---------------------------------------------------"<<endl;
   ofstream output("p3-output.txt", ios::app);
-  output<<setw(10)<<numNodes<<"\t\t\t\t"<<setw(10)<<txPower<<"\t\t\t\t"<<setw(10)<<routingProtocol<<"\t\t\t\t"<<setw(10)<<dataRate<<"\t\t\t\t"<<setw(10)<<rcvd<<setw(10)<<tx<<setw(10)<<rcvd/tx<<endl;
+  output<<rcvd/tx<<" ";
   output.close();
 
   return 0; 
